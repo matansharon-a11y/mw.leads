@@ -55,6 +55,18 @@ function tel(raw) {
   if (d.length === 10) return "+1" + d;
   return "+" + d;
 }
+// a lead whose phone isn't Israeli (Jeinna, 16 Nov 2026: international leads are handled apart, so the screen says so)
+const CC = [["1", "ארה״ב/קנדה", "US/Canada"], ["44", "בריטניה", "UK"], ["49", "גרמניה", "Germany"], ["33", "צרפת", "France"], ["39", "איטליה", "Italy"], ["34", "ספרד", "Spain"],
+  ["31", "הולנד", "Netherlands"], ["41", "שווייץ", "Switzerland"], ["43", "אוסטריה", "Austria"], ["32", "בלגיה", "Belgium"], ["353", "אירלנד", "Ireland"], ["351", "פורטוגל", "Portugal"],
+  ["30", "יוון", "Greece"], ["46", "שוודיה", "Sweden"], ["47", "נורווגיה", "Norway"], ["45", "דנמרק", "Denmark"], ["48", "פולין", "Poland"], ["7", "רוסיה/קזחסטן", "Russia/Kazakhstan"],
+  ["380", "אוקראינה", "Ukraine"], ["61", "אוסטרליה", "Australia"], ["64", "ניו זילנד", "New Zealand"], ["27", "דרום אפריקה", "South Africa"], ["91", "הודו", "India"], ["65", "סינגפור", "Singapore"],
+  ["852", "הונג קונג", "Hong Kong"], ["86", "סין", "China"], ["81", "יפן", "Japan"], ["55", "ברזיל", "Brazil"], ["52", "מקסיקו", "Mexico"], ["54", "ארגנטינה", "Argentina"], ["971", "איחוד האמירויות", "UAE"]]
+  .sort((a, b) => b[0].length - a[0].length);
+function intl(l) {
+  const e = tel(l && l.phone); if (!e || e.indexOf("+972") === 0) return null;
+  const c = CC.find((x) => e.indexOf("+" + x[0]) === 0);
+  return { code: c ? "+" + c[0] : e.slice(0, 4), country: c ? L(c[1], c[2]) : "" };
+}
 function telShow(e) { if (!e) return ""; if (e.indexOf("+972") === 0) { const r = "0" + e.slice(4); return r.length === 10 ? r.slice(0, 3) + "-" + r.slice(3, 6) + "-" + r.slice(6) : r; } return e; }
 function toast(t, bad) {
   const el = $("toast"); el.firstElementChild.textContent = t; el.firstElementChild.className = bad ? "bad" : ""; el.hidden = false;
@@ -182,7 +194,7 @@ function rowHtml(l, callRow) {
   const cls = callRow ? (callLate(l) ? " callrow late" : iso(l.fuAt) === iso(Date.now()) ? " callrow today" : " callrow") : "";
   return '<div class="row' + cls + (f.top && w && !k && !callRow ? " hot" : "") + (f.done ? " done" : "") + (k ? " locked" : "") + '" data-id="' + esc(l.id) + '">' +
     '<button type="button" class="open" data-act="open"><span class="av st-' + s.c + '">' + esc((l.name || "?").trim().charAt(0).toUpperCase()) + '</span>' +
-    '<span class="txt"><b>' + esc(l.name) + '</b><small>' + esc(line) + '</small>' + (st ? '<small class="stamp">' + esc(st) + '</small>' : "") + '</span></button>' +
+    '<span class="txt"><b>' + esc(l.name) + (intl(l) ? ' <i class="intl-tag">🌍 ' + esc(intl(l).country || intl(l).code) + '</i>' : "") + '</b><small>' + esc(line) + '</small>' + (st ? '<small class="stamp">' + esc(st) + '</small>' : "") + '</span></button>' +
     (e && !k ? '<a class="ring" data-act="call" data-tap="call" href="tel:' + esc(e) + '" aria-label="' + L("להתקשר", "Call") + '">' + PHONE + '</a>' : '<span class="ring off" aria-hidden="true">' + PHONE + '</span>') + '</div>';
 }
 function render() {
@@ -271,6 +283,7 @@ function renderLead(id, fresh) {
   $("leadBody").innerHTML =
     '<button type="button" class="back" data-act="back" aria-label="' + L("סגירת הליד", "Close the lead") + '">✕ ' + L("סגירה", "Close") + '</button>' +
     '<h2 class="name">' + esc(l.name) + '</h2>' +
+    (intl(l) ? '<div class="intl-ban">🌍 <b>' + L("ליד בינלאומי", "International lead") + '</b><span>' + (intl(l).country ? L("מספר מ", "Phone number from ") + esc(intl(l).country) + ' ' : L("מספר מחו״ל ", "Number from abroad ")) + '<span dir="ltr">(' + esc(intl(l).code) + ')</span></span></div>' : "") +
     (l.interest ? '<div class="about">' + esc(l.interest) + '</div>' : "") +
     (w ? '<div class="flag">' + esc(w) + '</div>' : "") +
     pendBox(id) +

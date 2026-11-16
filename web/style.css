@@ -354,3 +354,8 @@ button{cursor:pointer}
 .rleg th.bad{color:var(--hot)}
 .rleg p{margin:0;padding:8px 14px 12px;border-top:1px solid var(--line);font-size:13px}
 .rleg td b{color:var(--fg);font-weight:700}
+
+/* international lead: the phone isn't Israeli (16 Nov 2026) */
+.intl-tag{font-style:normal;font-weight:700;font-size:13px;background:#E6F0FF;color:#0B4FB3;border-radius:999px;padding:2px 8px;margin-inline-start:6px;white-space:nowrap;vertical-align:middle}
+.intl-ban{display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;background:#E6F0FF;border:2px solid #0B4FB3;color:#0B4FB3;border-radius:16px;padding:12px 14px;font-size:16px}
+.intl-ban b{font-size:20px;font-weight:900}
