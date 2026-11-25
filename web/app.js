@@ -599,11 +599,20 @@ function showKeyGuide(refused) {
     step(5, L("שולחים את המפתח לג׳ינה, רק אליה", "Send the key to Jeinna, just to her"),
       '<p class="ksmall">' + L("בהודעה פרטית, לא בקבוצה. זה כמו סיסמה. ג׳ינה מוסיפה אותו, ואז אפשר לעבוד.", "In a private message, not a group. It works like a password. Jeinna adds it, then you can work.") + '</p>') +
     '</ol>' +
-    '<div class="dlgbtns"><a class="soft" target="_blank" rel="noopener" href="https://matanwildphotography.monday.com/">' + L("פתיחת monday", "Open monday") + '</a><button type="button" class="dark" id="keyOk">' + L("הבנתי", "Got it") + '</button></div>';
+    '<div id="keyMsg" class="msg" hidden></div>' +
+    '<div class="dlgbtns"><a class="soft" target="_blank" rel="noopener" href="https://matanwildphotography.monday.com/">' + L("פתיחת monday", "Open monday") + '</a><button type="button" class="dark" id="keyCheck">' + L("לבדוק שוב", "Check again") + '</button></div>';
+  // no way out until the key is really there (Jeinna, 25 Nov 2026): no close button, no tapping outside
   $("keyDlg").hidden = false;
-  $("keyOk").addEventListener("click", () => { $("keyDlg").hidden = true; });
+  $("keyCheck").addEventListener("click", async () => {
+    const b = $("keyCheck"), m = $("keyMsg"); b.disabled = true; m.hidden = true;
+    try {
+      const j = await fn("act", { keycheck: true });
+      if (j.own) { S.ownKey = true; $("keyDlg").hidden = true; toast("\u2713 " + L("המפתח שלך עובד. אפשר לעבוד.", "Your key works. You can work now.")); return; }
+      m.textContent = L("עדיין לא. ג׳ינה עוד לא הוסיפה את המפתח שלך.", "Not yet. Jeinna hasn't added your key yet."); m.hidden = false;
+    } catch (_) { m.textContent = L("לא הצלחנו לבדוק. מנסים שוב עוד רגע.", "Couldn't check. Try again in a moment."); m.hidden = false; }
+    b.disabled = false;
+  });
 }
-$("keyDlg").addEventListener("click", (ev) => { if (ev.target.id === "keyDlg") $("keyDlg").hidden = true; });
 /* ---------- server calls ---------- */
 async function fn(name, body) {
   const { data: { session } } = await sb.auth.getSession();
@@ -1128,6 +1137,7 @@ async function start(user) {
   if (!me) { S.dbReady = true; banner(L("המייל הזה לא ברשימת הצוות.", "This email isn't on the team list."), ""); render(); return; }
   try { S.inFocus = localStorage.getItem("mwpl.focus") === "__calls" ? "__calls" : null; } catch (_) {} // only the Follow-ups tab is remembered
   await Promise.all([loadAll(), loadMeta(), loadLocks(), fn("act", { keycheck: true }).then((j) => { S.ownKey = j.own !== false; }, () => {})]);
+  if (S.ownKey === false) showKeyGuide(false); // no own monday key yet: the guide covers the app until it's added
   // a lead that was open before a refresh opens again
   let was = null; try { was = localStorage.getItem("mwpl.open"); } catch (_) {}
   const where = loadWhere();

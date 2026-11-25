@@ -372,3 +372,5 @@ button,a{-webkit-user-select:none;user-select:none}
 .khi .kbtn{border-color:transparent}
 .ksmall{margin:0;font-size:14px;color:var(--muted)}
 .keybox .dlgbtns a.soft{text-decoration:none;display:flex;align-items:center;justify-content:center}
+#keyDlg{z-index:40}
+.keybox .msg{color:var(--hot);background:var(--card)}
