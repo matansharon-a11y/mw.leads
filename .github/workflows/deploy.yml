@@ -29,7 +29,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+      url: ${{ steps.deployment.outputs.page_url || steps.deploy1.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
       - name: Fill in config.js
@@ -47,7 +47,14 @@ jobs:
       - uses: actions/upload-pages-artifact@v5
         with:
           path: web
+      # GitHub sometimes can't find the upload right away ("No artifacts named github-pages"): wait and try again
+      - id: deploy1
+        continue-on-error: true
+        uses: actions/deploy-pages@v5
+      - if: steps.deploy1.outcome == 'failure'
+        run: sleep 45
       - id: deployment
+        if: steps.deploy1.outcome == 'failure'
         uses: actions/deploy-pages@v5
 
   supabase:
