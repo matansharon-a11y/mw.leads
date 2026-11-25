@@ -796,6 +796,8 @@ function banner(msg, kind, retry) {
 function errText(e) {
   const c = e && e.code;
   if (c === "no_token") return L("החיבור ל-monday עוד לא הוגדר (חסר מפתח API). הרשימה השמורה מוצגת.", "The monday connection isn't set up yet (no API token). Showing the saved list.");
+  if (c === "no_own_token") return L("המפתח האישי שלך ל-monday עוד לא הוגדר, אז זה לא נשמר. מבקשים מג׳ינה להגדיר אותו.", "Your own monday key isn't set up yet, so this wasn't saved. Ask Jeinna to set it up.");
+  if (c === "own_token_refused") return L("monday דחה את המפתח האישי שלך, אז זה לא נשמר. יוצרים מפתח חדש ומבקשים מג׳ינה לעדכן.", "monday refused your own key, so this wasn't saved. Make a new key in monday and ask Jeinna to update it.");
   if (c === "needs_reauth") return L("monday דחה את מפתח ה-API. צריך מפתח חדש.", "monday refused the API token. A new token is needed.");
   if (c === "not_team" || c === "signed_out") return L("צריך להתחבר מחדש.", "Please sign in again.");
   if (c === "no_delete") return L("רק מתן וג׳ינה יכולים למחוק לידים.", "Only Matan and Jeinna can delete leads.");
