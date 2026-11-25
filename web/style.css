@@ -351,3 +351,24 @@ button,a{-webkit-user-select:none;user-select:none}
 /* a toast with a button */
 .toast div.act{pointer-events:auto;display:flex;align-items:center;gap:14px;border-radius:16px;padding:12px 14px 12px 20px}
 .toast div.act button{flex:none;border:none;background:var(--ink-fg);color:var(--ink);font-weight:700;font-size:15px;border-radius:12px;padding:9px 14px;min-height:40px}
+
+/* the "set up your monday key" guide */
+.keybox{max-width:420px;max-height:calc(100vh - 32px);overflow:auto}
+.ksteps{list-style:none;margin:4px 0 0;padding:0;display:flex;flex-direction:column;gap:12px}
+.kstep{display:flex;gap:10px;align-items:flex-start}
+.kstep>div{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:6px}
+.kstep b{font-size:15px;font-weight:700}
+.kn{flex:none;width:26px;height:26px;border-radius:50%;background:var(--ink);color:var(--ink-fg);display:grid;place-items:center;font-weight:700;font-size:14px}
+.kpic{border:1px solid var(--line);border-radius:10px;padding:8px 10px;font-size:13px;background:var(--card);display:flex;gap:8px;align-items:center}
+.kbar{justify-content:space-between}.klogo{font-weight:800;color:#6161FF}.kdots{flex:1 1 auto}
+.kav{display:grid;place-items:center;width:26px;height:26px;border-radius:50%;background:#6161FF;color:#fff;font-weight:700}
+.kmenu,.kside{flex-direction:column;align-items:stretch;gap:2px}
+.kside{background:#1C1F3B;color:#D5D8F2;border-color:#1C1F3B}
+.kmenu span,.kside span{padding:5px 8px;border-radius:6px}
+.khi{outline:2.5px solid var(--hot);outline-offset:1px;border-radius:6px;font-weight:700}
+.kside .khi{background:#25407A;color:#fff}.kmenu .khi{background:var(--bg)}
+.kfield{justify-content:space-between}.kdots2{flex:1 1 auto;letter-spacing:2px;color:var(--muted)}
+.kbtn{display:inline-block;border:1px solid var(--line);border-radius:6px;padding:4px 10px;background:var(--bg);font-weight:600}
+.khi .kbtn{border-color:transparent}
+.ksmall{margin:0;font-size:14px;color:var(--muted)}
+.keybox .dlgbtns a.soft{text-decoration:none;display:flex;align-items:center;justify-content:center}

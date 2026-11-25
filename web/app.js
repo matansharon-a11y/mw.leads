@@ -258,6 +258,7 @@ function render() {
   if (render.h !== html) { list.innerHTML = html; render.h = html; }
 }
 async function openLead(id) {
+  if (S.ownKey === false) { showKeyGuide(false); return; } // no own monday key yet: the guide, not the lead
   const l = S.leads.get(id); if (!l) return;
   const k = lockOf(id);
   if (k) { toast(k.by_name + L(" עובד/ת על הליד הזה עכשיו", " is working on this lead right now"), true); return; }
@@ -576,6 +577,33 @@ $("delYes").addEventListener("click", async () => {
   }
 });
 
+
+/* ---------- your own monday key (Jeinna, 25 Nov 2026) ----------
+   Every change goes to monday with the person's own key, so monday shows who did it. Someone whose key isn't set up
+   yet can't work on leads: instead of saving, the app shows how to get the key, step by step, with small pictures. */
+function showKeyGuide(refused) {
+  const step = (n, title, pic) => '<li class="kstep"><span class="kn">' + n + '</span><div><b>' + title + '</b>' + pic + '</div></li>';
+  const hi = (t) => '<span class="khi">' + t + '</span>';
+  $("keyBody").innerHTML =
+    '<b id="keyTtl">' + (refused ? L("monday דחה את המפתח שלך", "monday refused your key") : L("קודם מגדירים את המפתח שלך ל-monday", "First, set up your monday key")) + '</b>' +
+    '<p>' + L("כל שינוי נשמר ב-monday בשמך, אז כל אחד צריך מפתח משלו. זה לוקח 2 דקות, פעם אחת.", "Every change is saved in monday under your name, so each person needs their own key. It takes 2 minutes, once.") + '</p>' +
+    '<ol class="ksteps">' +
+    step(1, L("פותחים את monday ולוחצים על התמונה שלך", "Open monday and tap your profile picture"),
+      '<div class="kpic kbar"><span class="klogo">monday</span><span class="kdots"></span>' + hi('<span class="kav">' + esc(((S.me && S.me.name) || "?").charAt(0)) + '</span>') + '</div>') +
+    step(2, L("לוחצים על Developers", "Tap Developers"),
+      '<div class="kpic kmenu"><span>My profile</span>' + hi("Developers") + '<span>Log out</span></div>') +
+    step(3, L("בתפריט משמאל לוחצים על API token", "In the menu on the left, tap API token"),
+      '<div class="kpic kside"><span>My apps</span><span>API playground</span>' + hi("API token") + '<span>API analytics</span></div>') +
+    step(4, L("לוחצים Show ואז Copy", "Tap Show, then Copy"),
+      '<div class="kpic kfield"><span class="kdots2">••••••••••••</span><span class="kbtn">Show</span>' + hi('<span class="kbtn">Copy</span>') + '</div>') +
+    step(5, L("שולחים את המפתח לג׳ינה, רק אליה", "Send the key to Jeinna, just to her"),
+      '<p class="ksmall">' + L("בהודעה פרטית, לא בקבוצה. זה כמו סיסמה. ג׳ינה מוסיפה אותו, ואז אפשר לעבוד.", "In a private message, not a group. It works like a password. Jeinna adds it, then you can work.") + '</p>') +
+    '</ol>' +
+    '<div class="dlgbtns"><a class="soft" target="_blank" rel="noopener" href="https://matanwildphotography.monday.com/">' + L("פתיחת monday", "Open monday") + '</a><button type="button" class="dark" id="keyOk">' + L("הבנתי", "Got it") + '</button></div>';
+  $("keyDlg").hidden = false;
+  $("keyOk").addEventListener("click", () => { $("keyDlg").hidden = true; });
+}
+$("keyDlg").addEventListener("click", (ev) => { if (ev.target.id === "keyDlg") $("keyDlg").hidden = true; });
 /* ---------- server calls ---------- */
 async function fn(name, body) {
   const { data: { session } } = await sb.auth.getSession();
@@ -587,7 +615,11 @@ async function fn(name, body) {
     keepalive: !!(body && body.tap), // a tap's save finishes even when Call or WhatsApp opens another app right away
   });
   const j = await r.json().catch(() => ({}));
-  if (!r.ok || j.ok === false) throw { code: j.code || j.error || "error", message: j.message || "", by: j.by || "" };
+  if (!r.ok || j.ok === false) {
+    const code = j.code || j.error || "error";
+    if (code === "no_own_token" || code === "own_token_refused") { S.ownKey = false; showKeyGuide(code === "own_token_refused"); }
+    throw { code, message: j.message || "", by: j.by || "" };
+  }
   return j;
 }
 
@@ -1095,7 +1127,7 @@ async function start(user) {
   S.me = me || null;
   if (!me) { S.dbReady = true; banner(L("המייל הזה לא ברשימת הצוות.", "This email isn't on the team list."), ""); render(); return; }
   try { S.inFocus = localStorage.getItem("mwpl.focus") === "__calls" ? "__calls" : null; } catch (_) {} // only the Follow-ups tab is remembered
-  await Promise.all([loadAll(), loadMeta(), loadLocks()]);
+  await Promise.all([loadAll(), loadMeta(), loadLocks(), fn("act", { keycheck: true }).then((j) => { S.ownKey = j.own !== false; }, () => {})]);
   // a lead that was open before a refresh opens again
   let was = null; try { was = localStorage.getItem("mwpl.open"); } catch (_) {}
   const where = loadWhere();

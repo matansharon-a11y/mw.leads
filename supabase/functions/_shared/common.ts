@@ -36,7 +36,7 @@ export class MondayError extends Error {
 // with that person's own monday token (secret MONDAY_TOKENS, one per line: email,token), and monday's activity log
 // shows who really did it. There is no fallback (Jeinna, 25 Nov 2026): without their own token the change isn't made
 // and the person is told to set it up. The shared MONDAY_API_TOKEN is only for the background sync (reading monday).
-function ownToken(email: string) {
+export function ownToken(email: string) {
   for (const line of (Deno.env.get("MONDAY_TOKENS") || "").split(/\r?\n/)) {
     const i = line.indexOf(",");
     if (i > 0 && line.slice(0, i).trim().toLowerCase() === email.toLowerCase() && line.slice(i + 1).trim()) return line.slice(i + 1).trim();

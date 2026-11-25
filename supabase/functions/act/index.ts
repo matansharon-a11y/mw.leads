@@ -1,7 +1,7 @@
 // One press on the lead screen: save the note (if any) and the answer to monday, as the
 // original page's finish(). The note is signed "— Name · date time" and monday's "Last change in
 // MWP Leads" column says who did what and when, so monday shows who really did it.
-import { admin, cors, json, monday, MondayError, teamMember } from "../_shared/common.ts";
+import { admin, cors, json, monday, MondayError, ownToken, teamMember } from "../_shared/common.ts";
 import { BOARD, C, LOST, STATUSES, STATUS_GROUP, historyText, israelToUtc, noteHtml, utcToIsrael } from "../_shared/signals.js";
 
 // monday's "Last change in MWP Leads" column: the lead's whole history, newest first (who, when, what).
@@ -32,6 +32,8 @@ Deno.serve(async (req) => {
   const mon = (q: string, v: Record<string, unknown> = {}) => monday(q, v, me.email);
 
   const b = await req.json().catch(() => ({}));
+  // the app asks once whether this person's own monday token is set up; without it they get the setup guide
+  if (b.keycheck) return json({ ok: true, own: !!ownToken(me.email) });
   const id = String(b.id || "");
   const label: string | null = b.label ? String(b.label) : null;
   const noAnswer = !!b.noAnswer;
