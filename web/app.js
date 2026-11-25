@@ -113,11 +113,20 @@ async function claim(id, renew) {
   if (error) return { ok: true }; // never block work on a lock error: the server still checks on every press
   return data || { ok: true };
 }
-function keepLock() {
-  clearInterval(S.hb); S.hb = setInterval(async () => { if (S.open && (await claim(S.open, true)).moved) clearInterval(S.hb); }, 60000);
+// One open lead per person, on all their devices (Jeinna, 25 Nov 2026): opening a lead on another phone or computer
+// closes it here, with a message. Coming back to this device only checks; it never takes the lead back.
+async function stillMine() {
+  if (!S.open) return;
+  const id = S.open, c = await claim(id, true);
+  if (c.moved && S.open === id) {
+    clearInterval(S.hb); closeLead();
+    toast(L("הליד נסגר כאן כי פתחת ליד אחר במכשיר אחר. אפשר לעבוד על ליד אחד בכל פעם.", "This lead closed here because you opened another lead on another device. You can work on one lead at a time."), true);
+  }
 }
-// back on a page with a lead open (phone woke up, tab chosen again): that lead is this person's again
-document.addEventListener("visibilitychange", () => { if (!document.hidden && S.open) { const id = S.open; claim(id).then((c) => { if (c.ok && S.open === id) keepLock(); }); } });
+function keepLock() {
+  clearInterval(S.hb); S.hb = setInterval(stillMine, 30000);
+}
+document.addEventListener("visibilitychange", () => { if (!document.hidden && S.open) stillMine(); });
 function release(id) { if (id) sb.rpc("release_lead", { p_id: id }).then(() => {}, () => {}); }
 
 /* ---------- ranking (unchanged) ---------- */
@@ -1066,6 +1075,7 @@ function renderSignin() {
   $("siEmail").placeholder = L("המייל שלך", "Your email");
   $("siPass").placeholder = L("סיסמה", "Password");
   $("siBtn").textContent = L("כניסה", "Sign in");
+  $("siForgot").textContent = L("שכחתי את הסיסמה", "Forgot your password?");
   $("pwTtl").textContent = L("בוחרים סיסמה משלך", "Choose your own password");
   $("pwSub").textContent = L("נכנסת עם הסיסמה הזמנית. בוחרים סיסמה חדשה (לפחות 8 תווים).", "You signed in with the starting password. Choose a new one (at least 8 characters).");
   $("pw1").placeholder = L("סיסמה חדשה", "New password");
@@ -1089,6 +1099,18 @@ $("siForm").addEventListener("submit", async (ev) => {
   }
   $("siPass").value = ""; m.hidden = true;
 });
+// forgot the password (Jeinna, 25 Nov 2026: Matan kept getting locked out): an email with a link. Opening it on the
+// same phone or computer signs you in and asks for a new password right away. No one else has to reset anything.
+$("siForgot").addEventListener("click", async () => {
+  const email = $("siEmail").value.trim().toLowerCase(), m = $("siMsg");
+  m.hidden = false; m.className = "msg bad";
+  if (!email) { m.textContent = L("קודם כותבים את המייל שלך למעלה.", "First type your email above."); $("siEmail").focus(); return; }
+  $("siForgot").disabled = true;
+  const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: location.origin + location.pathname });
+  $("siForgot").disabled = false;
+  if (error) { m.textContent = /rate limit|too many/i.test(error.message) ? L("כבר נשלח מייל. מחכים כמה דקות ומנסים שוב.", "An email was just sent. Wait a few minutes and try again.") : error.message; return; }
+  m.className = "msg"; m.textContent = L("שלחנו מייל ל-", "We sent an email to ") + email + L(". פותחים את הקישור שבו בטלפון הזה, ובוחרים סיסמה חדשה. לא הגיע מייל תוך 5 דקות? מבקשים מג׳ינה.", ". Open the link in it on this same phone or computer, then choose a new password. No email within 5 minutes? Ask Jeinna.");
+});
 // the starting password must be replaced: until a person chooses their own, the box shows after every sign-in
 function needsPw(user) { return !!user && !(user.user_metadata && user.user_metadata.own_password); }
 function showPw(force) {
@@ -1110,6 +1132,7 @@ $("pwBox").addEventListener("submit", async (ev) => {
   $("pwSave").disabled = false;
   if (error) { m.textContent = /same|different from the old/i.test(error.message) ? L("בוחרים סיסמה שונה מהקודמת.", "Choose a password different from the old one.") : error.message; return; }
   if (data && data.user) S.user = data.user;
+  S.recovering = false; $("pwLater").hidden = false;
   $("pwBox").hidden = true; toast(L("הסיסמה נשמרה", "Password saved"));
 });
 
@@ -1156,6 +1179,7 @@ async function start(user) {
     .on("postgres_changes", { event: "UPDATE", schema: "public", table: "sync_meta" }, (p) => { S.metaAt = +p.new.at || 0; setSync(); })
     .on("postgres_changes", { event: "*", schema: "public", table: "lead_locks" }, (p) => {
       if (p.eventType === "DELETE") S.locks.delete(p.old.lead_id); else if (p.new) S.locks.set(p.new.lead_id, p.new);
+      if (S.open && ((p.old && p.old.lead_id === S.open) || (p.new && p.new.lead_id !== S.open))) stillMine(); // another device may have opened a lead
       draw();
     })
     .on("postgres_changes", { event: "INSERT", schema: "public", table: "lead_updates" }, (p) => {
@@ -1192,4 +1216,10 @@ render(); setSync();
 const { data: { session } } = await sb.auth.getSession();
 if (session && session.user) start(session.user);
 else { $("signin").hidden = false; $("home").hidden = true; }
-sb.auth.onAuthStateChange((ev, s) => { if (ev === "SIGNED_IN" && s && !S.user) start(s.user); });
+sb.auth.onAuthStateChange((ev, s) => {
+  if (ev === "PASSWORD_RECOVERY") S.recovering = true; // came from the "forgot password" email: choose a new one now
+  if ((ev === "SIGNED_IN" || ev === "PASSWORD_RECOVERY") && s && !S.user) start(s.user);
+  if (S.recovering && S.user) { showPw(true); $("pwLater").hidden = true; window.scrollTo(0, 0); }
+});
+// the phone may clear a website's saved sign-in to free space; asking to keep it makes that much less likely
+try { navigator.storage && navigator.storage.persist && navigator.storage.persist(); } catch (_) {}

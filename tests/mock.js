@@ -77,10 +77,11 @@
       getSession: async () => ({ data: { session: { access_token: "t", user: { email: "tester@example.com" } } } }),
       onAuthStateChange() {}, signOut: async () => {}, signInWithOtp: async () => ({ error: null }),
       signInWithPassword: async () => ({ error: null }),
+      resetPasswordForEmail: async (email, o) => { window.__calls.push({ name: "reset", body: { email, redirectTo: o && o.redirectTo } }); return { error: null }; },
       updateUser: async (u) => { window.__calls.push({ name: "updateUser", body: { hasPassword: !!u.password, data: u.data } }); return { data: { user: { email: "tester@example.com", user_metadata: u.data } }, error: null }; },
     },
     from: q,
-    rpc: async (name, args) => { window.__calls.push({ name, body: args }); return { data: { ok: true }, error: null }; },
+    rpc: async (name, args) => { window.__calls.push({ name, body: args }); if (name === "claim_lead" && args && args.p_renew && window.__moved) return { data: { ok: false, moved: true }, error: null }; return { data: { ok: true }, error: null }; },
     channel() { const c = { on() { return c; }, subscribe(cb) { cb && cb("SUBSCRIBED"); return c; } }; return c; },
   };
   const realFetch = window.fetch;
