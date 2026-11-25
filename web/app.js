@@ -1075,7 +1075,6 @@ function renderSignin() {
   $("siEmail").placeholder = L("המייל שלך", "Your email");
   $("siPass").placeholder = L("סיסמה", "Password");
   $("siBtn").textContent = L("כניסה", "Sign in");
-  $("siForgot").textContent = L("שכחתי את הסיסמה", "Forgot your password?");
   $("pwTtl").textContent = L("בוחרים סיסמה משלך", "Choose your own password");
   $("pwSub").textContent = L("נכנסת עם הסיסמה הזמנית. בוחרים סיסמה חדשה (לפחות 8 תווים).", "You signed in with the starting password. Choose a new one (at least 8 characters).");
   $("pw1").placeholder = L("סיסמה חדשה", "New password");
@@ -1099,18 +1098,6 @@ $("siForm").addEventListener("submit", async (ev) => {
   }
   $("siPass").value = ""; m.hidden = true;
 });
-// forgot the password (Jeinna, 25 Nov 2026: Matan kept getting locked out): an email with a link. Opening it on the
-// same phone or computer signs you in and asks for a new password right away. No one else has to reset anything.
-$("siForgot").addEventListener("click", async () => {
-  const email = $("siEmail").value.trim().toLowerCase(), m = $("siMsg");
-  m.hidden = false; m.className = "msg bad";
-  if (!email) { m.textContent = L("קודם כותבים את המייל שלך למעלה.", "First type your email above."); $("siEmail").focus(); return; }
-  $("siForgot").disabled = true;
-  const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: location.origin + location.pathname });
-  $("siForgot").disabled = false;
-  if (error) { m.textContent = /rate limit|too many/i.test(error.message) ? L("כבר נשלח מייל. מחכים כמה דקות ומנסים שוב.", "An email was just sent. Wait a few minutes and try again.") : error.message; return; }
-  m.className = "msg"; m.textContent = L("שלחנו מייל ל-", "We sent an email to ") + email + L(". פותחים את הקישור שבו בטלפון הזה, ובוחרים סיסמה חדשה. לא הגיע מייל תוך 5 דקות? מבקשים מג׳ינה.", ". Open the link in it on this same phone or computer, then choose a new password. No email within 5 minutes? Ask Jeinna.");
-});
 // the starting password must be replaced: until a person chooses their own, the box shows after every sign-in
 function needsPw(user) { return !!user && !(user.user_metadata && user.user_metadata.own_password); }
 function showPw(force) {
@@ -1132,7 +1119,6 @@ $("pwBox").addEventListener("submit", async (ev) => {
   $("pwSave").disabled = false;
   if (error) { m.textContent = /same|different from the old/i.test(error.message) ? L("בוחרים סיסמה שונה מהקודמת.", "Choose a password different from the old one.") : error.message; return; }
   if (data && data.user) S.user = data.user;
-  S.recovering = false; $("pwLater").hidden = false;
   $("pwBox").hidden = true; toast(L("הסיסמה נשמרה", "Password saved"));
 });
 
@@ -1216,10 +1202,7 @@ render(); setSync();
 const { data: { session } } = await sb.auth.getSession();
 if (session && session.user) start(session.user);
 else { $("signin").hidden = false; $("home").hidden = true; }
-sb.auth.onAuthStateChange((ev, s) => {
-  if (ev === "PASSWORD_RECOVERY") S.recovering = true; // came from the "forgot password" email: choose a new one now
-  if ((ev === "SIGNED_IN" || ev === "PASSWORD_RECOVERY") && s && !S.user) start(s.user);
-  if (S.recovering && S.user) { showPw(true); $("pwLater").hidden = true; window.scrollTo(0, 0); }
-});
+// a forgotten password is reset by Jeinna in Supabase (SQL), so there's no "forgot password" link (Jeinna, 25 Nov 2026)
+sb.auth.onAuthStateChange((ev, s) => { if (ev === "SIGNED_IN" && s && !S.user) start(s.user); });
 // the phone may clear a website's saved sign-in to free space; asking to keep it makes that much less likely
 try { navigator.storage && navigator.storage.persist && navigator.storage.persist(); } catch (_) {}

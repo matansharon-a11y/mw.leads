@@ -59,7 +59,7 @@ Known quirks kept from the original: the follow-up date is read but not used ("F
 
 ## Team
 
-**Sign-in: email + password (10 Nov 2026).** No sign-in emails are sent. Jeinna creates each account in Supabase → Authentication → Users → Add user → Create new user (email, a starting password, Auto Confirm User on). After the first sign-in the page asks the person to choose their own password (kept as `user_metadata.own_password`); "Change password" sits at the bottom of the list. A forgotten password: delete the user in Supabase and create it again.
+**Sign-in: email + password (10 Nov 2026).** No sign-in emails are sent. Jeinna creates each account in Supabase → Authentication → Users → Add user → Create new user (email, a starting password, Auto Confirm User on). After the first sign-in the page asks the person to choose their own password (kept as `user_metadata.own_password`); "Change password" sits at the bottom of the list. A forgotten password (there's no "forgot password" link): Jeinna sets a new one in Supabase → SQL Editor with `update auth.users set encrypted_password = extensions.crypt('NEW_PASSWORD', extensions.gen_salt('bf')), raw_user_meta_data = coalesce(raw_user_meta_data, '{}'::jsonb) || '{"own_password": true}'::jsonb, updated_at = now() where email = 'their@email';` Other devices stay signed in.
 
 Only the people in the `TEAM` secret can sign in (a trigger refuses any other login). One per line, `email,Name`.
 Change the secret and re-run the Deploy workflow. The names appear on notes in monday. No emails are kept in this repository.

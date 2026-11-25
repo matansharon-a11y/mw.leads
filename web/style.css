@@ -374,6 +374,3 @@ button,a{-webkit-user-select:none;user-select:none}
 .keybox .dlgbtns a.soft{text-decoration:none;display:flex;align-items:center;justify-content:center}
 #keyDlg{z-index:40}
 .keybox .msg{color:var(--hot);background:var(--card)}
-
-/* "Forgot your password?" under the sign-in form */
-#signin .forgot{border:none;background:none;color:var(--c-new);font-weight:700;font-size:16px;padding:12px 0;min-height:44px;text-align:start}
