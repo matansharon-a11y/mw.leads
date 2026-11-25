@@ -1,7 +1,7 @@
 // Sync monday's Leads board into the leads table: the same reading and signal rules as
 // Matan's page. Called every minute by pg_cron (x-cron-secret) and by the page's Refresh
 // button / auto-refresh (a signed-in team member).
-import { admin, cors, json, monday, MondayError, teamMember } from "../_shared/common.ts";
+import { admin, cors, json, monday, MondayError, ownToken, teamMember } from "../_shared/common.ts";
 import { BOARD, C, SKIP_GROUPS, differs, fromItem, historyRow, historyText, merge, signals, stamp, statusLog, teamName } from "../_shared/signals.js";
 
 // only the columns MWP Leads uses (Follow Up Date's value carries its time)
@@ -160,32 +160,47 @@ Deno.serve(async (req) => {
       for (const r of all) (byLead[r.lead_id] ||= []).push(r);
       const { data: sentRows } = await db.from("lead_hist").select("lead_id,text");
       const sent = new Map((sentRows || []).map((r: any) => [r.lead_id, r.text]));
-      const todo: { id: string; v: string }[] = [];
+      const todo: { id: string; v: string; as: string }[] = [];
+      // Written with the key of the person who made the lead's latest change, never a shared key, so monday's
+      // activity log names them (Jeinna, 25 Nov 2026). A lead whose latest change is by someone without their own
+      // key yet is left for later and picked up once their key is added.
+      const { data: teamRows } = await db.from("team").select("email,name");
+      const first = (n: string) => String(n || "").trim().split(/\s+/)[0].toLowerCase();
+      const emailOf = (name: string) => ((teamRows || []).find((t: any) => first(t.name) === first(name)) || {} as any).email || "";
+      const actorOf = (rows: any[]) => { const r = rows.filter((x) => !x.bot && x.by && emailOf(x.by)).sort((a, b) => b.at - a.at)[0]; return r ? emailOf(r.by) : ""; };
       // every lead on the board, Won and Lost included, so the last step is always there
       for (const id of new Set(items.map((it: any) => String(it.id)))) {
         const v = historyText(byLead[id] || []);
-        if (sent.get(id) !== v) todo.push({ id, v });
+        if (sent.get(id) === v) continue;
+        const as = actorOf(byLead[id] || []);
+        if (!as || !ownToken(as)) continue;
+        todo.push({ id, v, as });
         if (todo.length >= 25) break;
       }
       if (todo.length) {
-        const q = todo.map((t, i) => `u${i}: change_simple_column_value(board_id: ${BOARD}, item_id: ${t.id}, column_id: "${C.who}", value: $v${i}) { id }`).join("\n");
-        const vars: Record<string, string> = {};
-        todo.forEach((t, i) => { vars["v" + i] = t.v; });
-        let done = todo;
-        try {
-          await monday(`mutation (${todo.map((_, i) => "$v" + i + ": String!").join(", ")}) {\n${q}\n}`, vars);
-        } catch (_) {
-          // one bad item (deleted, archived…) must not hold up the rest: one at a time, and a lead that
-          // still fails is marked so it isn't retried every minute until its history changes again
-          done = [];
-          for (const t of todo) {
-            try {
-              await monday(`mutation ($v: String!) { change_simple_column_value(board_id: ${BOARD}, item_id: ${t.id}, column_id: "${C.who}", value: $v) { id } }`, { v: t.v });
-              done.push(t);
-            } catch (e) { console.log("history to monday failed", t.id, String((e as Error).message)); done.push({ id: t.id, v: t.v }); }
+        const done: { id: string; v: string }[] = [];
+        // one batch per person, each with that person's own key
+        for (const as of new Set(todo.map((t) => t.as))) {
+          const mine = todo.filter((t) => t.as === as);
+          const q = mine.map((t, i) => `u${i}: change_simple_column_value(board_id: ${BOARD}, item_id: ${t.id}, column_id: "${C.who}", value: $v${i}) { id }`).join("\n");
+          const vars: Record<string, string> = {};
+          mine.forEach((t, i) => { vars["v" + i] = t.v; });
+          try {
+            await monday(`mutation (${mine.map((_, i) => "$v" + i + ": String!").join(", ")}) {\n${q}\n}`, vars, as);
+            done.push(...mine);
+          } catch (e0) {
+            if (e0 instanceof MondayError && (e0.code === "no_own_token" || e0.code === "own_token_refused")) { console.log("history waits for", as, "own key"); continue; }
+            // one bad item (deleted, archived…) must not hold up the rest: one at a time, and a lead that
+            // still fails is marked so it isn't retried every minute until its history changes again
+            for (const t of mine) {
+              try {
+                await monday(`mutation ($v: String!) { change_simple_column_value(board_id: ${BOARD}, item_id: ${t.id}, column_id: "${C.who}", value: $v) { id } }`, { v: t.v }, as);
+              } catch (e) { console.log("history to monday failed", t.id, String((e as Error).message)); }
+              done.push({ id: t.id, v: t.v });
+            }
           }
         }
-        await db.from("lead_hist").upsert(done.map((t) => ({ lead_id: t.id, text: t.v, at: Date.now() })));
+        if (done.length) await db.from("lead_hist").upsert(done.map((t) => ({ lead_id: t.id, text: t.v, at: Date.now() })));
         histSent = done.length;
       }
     } catch (e) { console.log("history to monday skipped", String((e as Error).message)); }

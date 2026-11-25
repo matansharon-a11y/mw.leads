@@ -53,7 +53,8 @@ Known quirks kept from the original: the follow-up date is read but not used ("F
      MWP Leads with). monday credits every change to the token's owner, so each person's changes are made with their
      own token and monday's activity log shows who did it. There is no fallback: someone without a line (or whose
      token monday refuses) can't save until it's set, and the app tells them so. `MONDAY_API_TOKEN` is only for the
-     background sync. Each person makes their token in monday: profile picture → Developers → My access tokens.
+     background sync's reading (reads don't show in monday's activity log); its catch-up of the history column is written
+     with the key of whoever made the lead's latest change, or waits until that person's key is added. Each person makes their token in monday: profile picture → Developers → My access tokens.
 4. Supabase → Authentication → Emails: set a custom SMTP server (the built-in sender allows only a few emails an hour).
 
 ## Team
