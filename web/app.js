@@ -419,7 +419,7 @@ function gcalLink(l, lang, forClient) {
   p.set("dates", gcalDates(l.fuAt));
   p.set("ctz", "Asia/Jerusalem");
   if (!forClient) {
-    p.set("details", [l.phone ? "Phone: " + l.phone : "", l.interest ? "Interested in: " + l.interest : "", "MWP Leads: https://lululab-ctrl.github.io/mw.leads/"].filter(Boolean).join("\n"));
+    p.set("details", [l.phone ? "Phone: " + l.phone : "", l.interest ? "Interested in: " + l.interest : "", "MWP Leads: https://matansharon-a11y.github.io/mw.leads/"].filter(Boolean).join("\n"));
     if (l.email && /@/.test(l.email)) p.set("add", l.email);
   }
   return "https://calendar.google.com/calendar/render?" + p.toString();

@@ -46,7 +46,7 @@ Known quirks kept from the original: the follow-up date is read but not used ("F
 
 1. GitHub: Settings → Pages → Source: **GitHub Actions**.
 2. Settings → Secrets and variables → Actions:
-   - Variables: none needed. The MWP Leads project's address and public key are in `web/config.js`; the site is https://lululab-ctrl.github.io/mw.leads/
+   - Variables: none needed. The MWP Leads project's address and public key are in `web/config.js`; the site is https://matansharon-a11y.github.io/mw.leads/
    - Secrets: `SUPABASE_ACCESS_TOKEN`, `SUPABASE_DB_PASSWORD`, `CRON_SECRET` (long random text), `TEAM` (one per line: `email,Name`), `MONDAY_API_TOKEN` (later)
 3. Push to `main` (or run the Deploy workflow). Until `MONDAY_API_TOKEN` is set the list stays empty and the page says the monday connection isn't set up.
    - Required, `MONDAY_TOKENS`: each person's own monday token, one per line `email,token` (the email they sign in to
