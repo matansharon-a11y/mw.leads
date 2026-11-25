@@ -49,6 +49,11 @@ Known quirks kept from the original: the follow-up date is read but not used ("F
    - Variables: none needed. The MWP Leads project's address and public key are in `web/config.js`; the site is https://lululab-ctrl.github.io/mw.leads/
    - Secrets: `SUPABASE_ACCESS_TOKEN`, `SUPABASE_DB_PASSWORD`, `CRON_SECRET` (long random text), `TEAM` (one per line: `email,Name`), `MONDAY_API_TOKEN` (later)
 3. Push to `main` (or run the Deploy workflow). Until `MONDAY_API_TOKEN` is set the list stays empty and the page says the monday connection isn't set up.
+   - Optional, `MONDAY_TOKENS`: each person's own monday token, one per line `email,token` (the email they sign in to
+     MWP Leads with). monday credits every change to the token's owner, so with this set monday's activity log shows
+     Matan, Emilia and so on instead of whoever owns `MONDAY_API_TOKEN`. Each person makes their token in monday:
+     profile picture → Developers → My access tokens. A person without a line (or whose token monday refuses) falls back
+     to `MONDAY_API_TOKEN`; the "Last change in MWP Leads" column and signed notes name the person either way.
 4. Supabase → Authentication → Emails: set a custom SMTP server (the built-in sender allows only a few emails an hour).
 
 ## Team

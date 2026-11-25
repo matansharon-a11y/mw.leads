@@ -94,12 +94,14 @@ jobs:
         env:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
           MONDAY_API_TOKEN: ${{ secrets.MONDAY_API_TOKEN }}
+          MONDAY_TOKENS: ${{ secrets.MONDAY_TOKENS }}
           SITE_ORIGIN: ${{ vars.SITE_ORIGIN || 'https://lululab-ctrl.github.io' }}
         run: |
           CRON_SECRET="$(printf '%s' "$CRON_SECRET" | LC_ALL=C tr -cd 'A-Za-z0-9')"
           args=()
           [ -n "$CRON_SECRET" ] && args+=("CRON_SECRET=$CRON_SECRET")
           [ -n "$MONDAY_API_TOKEN" ] && args+=("MONDAY_API_TOKEN=$MONDAY_API_TOKEN")
+          [ -n "$MONDAY_TOKENS" ] && args+=("MONDAY_TOKENS=$MONDAY_TOKENS") # each person's own token (email,token per line): monday shows who did it
           [ -n "$SITE_ORIGIN" ] && args+=("SITE_ORIGIN=$SITE_ORIGIN")
           [ -z "$MONDAY_API_TOKEN" ] && echo "::warning title=No monday token::MONDAY_API_TOKEN isn't set: syncing and the buttons won't work until it is."
           if [ ${#args[@]} -gt 0 ]; then supabase secrets set "${args[@]}" --project-ref "$REF"; fi

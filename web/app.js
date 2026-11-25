@@ -68,9 +68,13 @@ function intl(l) {
   return { code: c ? "+" + c[0] : e.slice(0, 4), country: c ? L(c[1], c[2]) : "" };
 }
 function telShow(e) { if (!e) return ""; if (e.indexOf("+972") === 0) { const r = "0" + e.slice(4); return r.length === 10 ? r.slice(0, 3) + "-" + r.slice(3, 6) + "-" + r.slice(6) : r; } return e; }
-function toast(t, bad) {
-  const el = $("toast"); el.firstElementChild.textContent = t; el.firstElementChild.className = bad ? "bad" : ""; el.hidden = false;
-  clearTimeout(toast.t); toast.t = setTimeout(() => { el.hidden = true; }, bad ? 6000 : 2600);
+function toast(t, bad, act) {
+  const el = $("toast"), box = el.firstElementChild;
+  box.textContent = t; box.className = (bad ? "bad" : "") + (act ? " act" : "");
+  // a toast can carry one button, e.g. "Back to where I was" after a lead moved (Jeinna, 25 Nov 2026)
+  if (act) { const b = document.createElement("button"); b.type = "button"; b.textContent = act.label; b.addEventListener("click", () => { el.hidden = true; act.go(); }); box.appendChild(b); }
+  el.hidden = false;
+  clearTimeout(toast.t); toast.t = setTimeout(() => { el.hidden = true; }, act ? 7000 : bad ? 6000 : 2600);
 }
 
 // a database row → the shape the original page works with
@@ -310,11 +314,22 @@ function closeLead() {
   render();
   window.scrollTo(0, S.listY || 0); // back exactly where you were
   // if what you did moved the lead, say where it went
+  // if what you did moved the lead, take you to where it is now (lit up for a moment), with a button back to where
+  // you were in the list; a lead that left the list (Won, Lost) can be opened again (Jeinna, 25 Nov 2026)
   const before = S.openSec, after = id ? secOf(id) : null, l = id && S.leads.get(id);
   if (l && before !== after) {
-    const name = l.name || "";
-    if (after === null) toast(name + L(" יצא/ה מהרשימה (", " left the list (") + (STM[l.status] ? L(STM[l.status].he, l.status) : l.status) + ")");
-    else toast(name + L(" עבר/ה ל״", " moved to \u201c") + secName(after) + L("״", "\u201d"));
+    const name = l.name || "", back = S.listY || 0;
+    if (after === null) toast(name + L(" יצא/ה מהרשימה (", " left the list (") + (STM[l.status] ? L(STM[l.status].he, l.status) : l.status) + ")", false, { label: L("לפתוח שוב", "Open again"), go: () => openLead(id) });
+    else {
+      requestAnimationFrame(() => {
+        const row = document.querySelector('#list .row[data-id="' + (window.CSS && CSS.escape ? CSS.escape(id) : id) + '"]');
+        if (!row) return;
+        const top = row.getBoundingClientRect().top + window.scrollY - $("tabwrap").offsetHeight - window.innerHeight / 3;
+        window.scrollTo(0, Math.max(0, top));
+        row.classList.add("moved"); setTimeout(() => row.classList.remove("moved"), 2600);
+      });
+      toast(name + L(" עבר/ה ל״", " moved to \u201c") + secName(after) + L("״", "\u201d"), false, { label: L("חזרה למקום שלי", "Back to where I was"), go: () => window.scrollTo(0, back) });
+    }
   }
 }
 // which list section a lead is in right now (null: not listed, e.g. Won, Lost, Future)
@@ -595,8 +610,13 @@ async function finish(label, noAnswer, reason) {
   if (moving) tmp.push({ id: "local-s-" + now, lead_id: id, kind: "status", text: (l.status || "—") + " → " + label + (reason ? " (" + reason + ")" : ""), by: me, at: now, source: "app" });
   try { localStorage.removeItem("mwpl.draft." + id); } catch (_) {}
   if (S.open === id) { S.openCopy = guess; S.hist = tmp.concat(S.hist || []); }
+  const wasSec = secOf(id);
   patch(id, guess); clearPend(id);
-  toast(label ? L("נשמר: ", "Saved: ") + word(label) : L("נשמר", "Saved"));
+  // say right away, in plain words, where the lead is now (Jeinna, 25 Nov 2026: "always tell me where it went")
+  const was = wasSec, now2 = secOf(id), nm = l.name || "";
+  if (moving && now2 === null) toast("\u2713 " + nm + L(" עכשיו ״", " is now \u201c") + (STM[label] ? L(STM[label].he, label) : label) + L("״ ויצא/ה מהרשימה", "\u201d and left the list"));
+  else if (now2 !== null && now2 !== was) toast("\u2713 " + L("נשמר. ", "Saved. ") + nm + L(" עבר/ה ל״", " moved to \u201c") + secName(now2) + L("״", "\u201d"));
+  else toast("\u2713 " + (label ? L("נשמר: ", "Saved: ") + word(label) : L("נשמר", "Saved")) + (now2 !== null ? L(" · נשאר/ת ב״", " · still in \u201c") + secName(now2) + L("״", "\u201d") : ""));
   if (S.open === id) renderLead(id, false);
   S.saving = (S.saving || 0) + 1;
   try {
@@ -1076,7 +1096,14 @@ async function start(user) {
   await Promise.all([loadAll(), loadMeta(), loadLocks()]);
   // a lead that was open before a refresh opens again
   let was = null; try { was = localStorage.getItem("mwpl.open"); } catch (_) {}
-  if (was && S.leads.has(was)) openLead(was); else if (was) { try { localStorage.removeItem("mwpl.open"); } catch (_) {} }
+  const where = loadWhere();
+  if (where && where.q) { S.q = where.q; $("q").value = where.q; }
+  render();
+  if (where) window.scrollTo(0, where.y || 0);
+  if (was && S.leads.has(was)) {
+    await openLead(was);
+    if (where) { S.listY = where.y || 0; if (S.open === was) $("lead").scrollTop = where.ly || 0; }
+  } else if (was) { try { localStorage.removeItem("mwpl.open"); } catch (_) {} }
   sb.channel("leads-live")
     .on("postgres_changes", { event: "*", schema: "public", table: "leads" }, (p) => {
       if (p.eventType === "DELETE") { S.leads.delete(p.old.id); } else if (p.new) { S.leads.set(p.new.id, fromRow(p.new)); }
@@ -1092,14 +1119,29 @@ async function start(user) {
         S.hist.unshift(p.new); S.hist.sort((a, b) => b.at - a.at); renderHist();
       }
     })
-    .subscribe((st) => { if (st === "SUBSCRIBED") { loadAll(); loadLocks(); } });
+    // after the phone wakes the app the live connection comes back; catch up a moment later so taps stay quick
+    .subscribe((st) => { if (st === "SUBSCRIBED") { if (!S.subOnce) { S.subOnce = true; loadAll(); loadLocks(); } else setTimeout(() => { loadAll(); loadLocks(); }, 900); } });
   setInterval(draw, 30000); // expired locks turn back to normal
   setTimeout(() => sync(false), 1200);
   setInterval(() => {
     if (document.hidden) return;
     if (Date.now() - Math.max(S.syncAt, S.metaAt) > 55000 && !S.open) sync(false); else setSync();
   }, 30000);
-  document.addEventListener("visibilitychange", () => { if (!document.hidden && Date.now() - Math.max(S.syncAt, S.metaAt) > 55000) sync(false); });
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) setTimeout(() => { if (!document.hidden && Date.now() - Math.max(S.syncAt, S.metaAt) > 55000) sync(false); }, 1500); });
+}
+
+// where you were (list position, open lead and its scroll, search), saved whenever the app goes to the background,
+// so coming back (even after the phone closed the page) lands in the same place (Jeinna, 25 Nov 2026)
+function saveWhere() {
+  if (!S.user) return;
+  const w = { y: S.open ? (S.listY || 0) : window.scrollY, ly: S.open ? $("lead").scrollTop : 0, q: S.q, at: Date.now() };
+  try { localStorage.setItem("mwpl.where", JSON.stringify(w)); } catch (_) {}
+}
+document.addEventListener("visibilitychange", () => { if (document.hidden) saveWhere(); });
+window.addEventListener("pagehide", saveWhere);
+function loadWhere() {
+  try { const w = JSON.parse(localStorage.getItem("mwpl.where") || "null"); if (w && Date.now() - w.at < 6 * 3600e3) return w; } catch (_) {}
+  return null;
 }
 
 render(); setSync();

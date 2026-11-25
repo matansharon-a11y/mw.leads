@@ -32,9 +32,30 @@ export class MondayError extends Error {
   constructor(code: string, message: string) { super(message); this.code = code; }
 }
 
-// one call to monday's API with the shop's token
-export async function monday(query: string, variables: Record<string, unknown> = {}) {
-  const token = Deno.env.get("MONDAY_API_TOKEN");
+// monday credits every change to the owner of the token that made it. So each person's own monday token is used
+// when it's set (secret MONDAY_TOKENS, one per line: email,token), and monday's activity log shows who really did
+// it; without one, the shared MONDAY_API_TOKEN is used (and the "Last change in MWP Leads" column names the person).
+function tokenFor(email?: string) {
+  if (email) {
+    for (const line of (Deno.env.get("MONDAY_TOKENS") || "").split(/\r?\n/)) {
+      const i = line.indexOf(",");
+      if (i > 0 && line.slice(0, i).trim().toLowerCase() === email.toLowerCase() && line.slice(i + 1).trim()) return line.slice(i + 1).trim();
+    }
+  }
+  return Deno.env.get("MONDAY_API_TOKEN");
+}
+
+// one call to monday's API, as the person who did it when their token is set (else with the shared token)
+export async function monday(query: string, variables: Record<string, unknown> = {}, as?: string): Promise<any> {
+  const shared = Deno.env.get("MONDAY_API_TOKEN"), own = tokenFor(as);
+  // a person's own token that monday refuses (revoked, no access to the board) falls back to the shared one
+  if (own && own !== shared) {
+    try { return await callMonday(own, query, variables); }
+    catch (e) { if (!(e instanceof MondayError && e.code === "needs_reauth") || !shared) throw e; console.log("own monday token refused, using the shared one:", as); }
+  }
+  return callMonday(shared, query, variables);
+}
+async function callMonday(token: string | undefined, query: string, variables: Record<string, unknown>) {
   if (!token) throw new MondayError("no_token", "The monday API token isn't set yet");
   const r = await fetch("https://api.monday.com/v2", {
     method: "POST",

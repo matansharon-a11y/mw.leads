@@ -6,11 +6,11 @@ import { BOARD, C, LOST, STATUSES, STATUS_GROUP, historyText, israelToUtc, noteH
 
 // monday's "Last change in MWP Leads" column: the lead's whole history, newest first (who, when, what).
 // The sync keeps it up to date too; a failure here never undoes the change itself.
-async function stampMonday(db: any, id: string) {
+async function stampMonday(db: any, id: string, as?: string) {
   try {
     const { data: rows } = await db.from("lead_updates").select("kind,text,by,at,bot").eq("lead_id", id);
     const v = historyText(rows || []);
-    await monday(`mutation ($b: ID!, $i: ID!, $c: String!, $v: String!) { change_simple_column_value(board_id: $b, item_id: $i, column_id: $c, value: $v) { id } }`, { b: String(BOARD), i: id, c: C.who, v });
+    await monday(`mutation ($b: ID!, $i: ID!, $c: String!, $v: String!) { change_simple_column_value(board_id: $b, item_id: $i, column_id: $c, value: $v) { id } }`, { b: String(BOARD), i: id, c: C.who, v }, as);
     await db.from("lead_hist").upsert({ lead_id: id, text: v, at: Date.now() });
   } catch (e) { console.log("history to monday failed", id, String((e as Error).message)); }
 }
@@ -28,6 +28,8 @@ Deno.serve(async (req) => {
   const db = admin();
   const me = await teamMember(req, db);
   if (!me) return json({ error: "not_team" }, 403);
+  // changes are made with this person's own monday token when it's set, so monday shows who did it
+  const mon = (q: string, v: Record<string, unknown> = {}) => monday(q, v, me.email);
 
   const b = await req.json().catch(() => ({}));
   const id = String(b.id || "");
@@ -71,7 +73,7 @@ Deno.serve(async (req) => {
     const u = new Date(at).toISOString();
     const cols = { [C.fuDate]: { date: u.slice(0, 10), time: u.slice(11, 19) }, [C.fu]: { label: "Follow-Up" } };
     try {
-      await monday(`mutation ($b: ID!, $i: ID!, $v: JSON!) { change_multiple_column_values(board_id: $b, item_id: $i, column_values: $v) { id } }`, { b: String(BOARD), i: id, v: JSON.stringify(cols) });
+      await mon(`mutation ($b: ID!, $i: ID!, $v: JSON!) { change_multiple_column_values(board_id: $b, item_id: $i, column_values: $v) { id } }`, { b: String(BOARD), i: id, v: JSON.stringify(cols) });
     } catch (e) {
       const code = e instanceof MondayError ? e.code : "error";
       return json({ ok: false, code, message: String((e as Error).message) }, code === "no_token" ? 503 : 502);
@@ -82,12 +84,12 @@ Deno.serve(async (req) => {
     await db.from("leads").update(fields).eq("id", id);
     const { data: act } = await db.from("lead_actions").insert({ lead_id: id, by_email: me.email, by_name: me.name, kind: "call", status_from: l.status, note: what + (note ? " · " + note : "") }).select("id").single();
     await db.from("lead_updates").upsert({ id: "call-" + (act?.id || now), lead_id: id, kind: "call", text: loc.date.split("-").reverse().join(".") + " " + loc.time + (note ? " · " + note : ""), by: me.name, at: now, source: "app" });
-    later(stampMonday(db, id));
+    later(stampMonday(db, id, me.email));
     return json({ ok: true, fields });
   }
   if (b.callDone === true) {
     try {
-      await monday(`mutation ($b: ID!, $i: ID!, $v: JSON!) { change_multiple_column_values(board_id: $b, item_id: $i, column_values: $v) { id } }`, { b: String(BOARD), i: id, v: JSON.stringify({ [C.fu]: { label: "Done" } }) });
+      await mon(`mutation ($b: ID!, $i: ID!, $v: JSON!) { change_multiple_column_values(board_id: $b, item_id: $i, column_values: $v) { id } }`, { b: String(BOARD), i: id, v: JSON.stringify({ [C.fu]: { label: "Done" } }) });
     } catch (e) {
       const code = e instanceof MondayError ? e.code : "error";
       return json({ ok: false, code, message: String((e as Error).message) }, code === "no_token" ? 503 : 502);
@@ -97,7 +99,7 @@ Deno.serve(async (req) => {
     await db.from("leads").update(fields).eq("id", id);
     const { data: act } = await db.from("lead_actions").insert({ lead_id: id, by_email: me.email, by_name: me.name, kind: "call_done", status_from: l.status, note: "Call done" }).select("id").single();
     await db.from("lead_updates").upsert({ id: "calldone-" + (act?.id || now), lead_id: id, kind: "call", text: "done", by: me.name, at: now, source: "app" });
-    later(stampMonday(db, id));
+    later(stampMonday(db, id, me.email));
     return json({ ok: true, fields });
   }
 
@@ -105,7 +107,7 @@ Deno.serve(async (req) => {
   if (b.delete === true) {
     if (!me.can_delete) return json({ ok: false, code: "no_delete" }, 403); // only Matan and Jeinna
     try {
-      await monday(`mutation ($i: ID!) { delete_item(item_id: $i) { id } }`, { i: id });
+      await mon(`mutation ($i: ID!) { delete_item(item_id: $i) { id } }`, { i: id });
     } catch (e) {
       const code = e instanceof MondayError ? e.code : "error";
       const message = String((e as Error).message);
@@ -129,13 +131,13 @@ Deno.serve(async (req) => {
   try {
     // the note and the status go to monday at the same time
     const noteP = text
-      ? monday(`mutation ($i: ID!, $b: String!) { create_update(item_id: $i, body: $b) { id } }`, { i: id, b: noteHtml(text, me.name, t0) })
+      ? mon(`mutation ($i: ID!, $b: String!) { create_update(item_id: $i, body: $b) { id } }`, { i: id, b: noteHtml(text, me.name, t0) })
       : Promise.resolve(null);
     let statusP: Promise<unknown> = Promise.resolve(null);
     if (moving) {
       const cols: Record<string, unknown> = { [C.status]: { label } };
       if (reason) cols[C.lost] = { label: reason };
-      statusP = monday(`mutation ($b: ID!, $i: ID!, $v: JSON!) { change_multiple_column_values(board_id: $b, item_id: $i, column_values: $v) { id } }`, { b: String(BOARD), i: id, v: JSON.stringify(cols) });
+      statusP = mon(`mutation ($b: ID!, $i: ID!, $v: JSON!) { change_multiple_column_values(board_id: $b, item_id: $i, column_values: $v) { id } }`, { b: String(BOARD), i: id, v: JSON.stringify(cols) });
     }
     const [noteR, statusR] = await Promise.allSettled([noteP, statusP]);
     if (noteR.status === "fulfilled") {
@@ -155,7 +157,7 @@ Deno.serve(async (req) => {
     if (moving) {
       // and to the group of the same name, after the answer (a failed move never undoes the status change)
       const g = STATUS_GROUP[label!];
-      if (g) later(monday(`mutation ($i: ID!, $g: String!) { move_item_to_group(item_id: $i, group_id: $g) { id } }`, { i: id, g })
+      if (g) later(mon(`mutation ($i: ID!, $g: String!) { move_item_to_group(item_id: $i, group_id: $g) { id } }`, { i: id, g })
         .catch((e) => console.log("group move failed", id, label, String((e as Error).message))));
     }
     if (label) fields.st_at = Date.now();
@@ -177,7 +179,7 @@ Deno.serve(async (req) => {
     if (text && updateId) rows.push({ id: updateId, lead_id: id, kind: "note", text, by: me.name, at: now, source: "app" });
     if (moving) rows.push({ id: "app-" + (act?.id || now), lead_id: id, kind: "status", text: (l.status || "—") + " → " + label + (reason ? " (" + reason + ")" : ""), by: me.name, at: now, source: "app" });
     if (rows.length) await db.from("lead_updates").upsert(rows);
-    later(stampMonday(db, id));
+    later(stampMonday(db, id, me.email));
     return json({ ok: true, fields });
   } catch (e) {
     const code = e instanceof MondayError ? e.code : "error";

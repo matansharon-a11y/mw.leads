@@ -338,3 +338,16 @@ button{cursor:pointer}
 .intl-tag{font-style:normal;font-weight:700;font-size:13px;background:#E6F0FF;color:#0B4FB3;border-radius:999px;padding:2px 8px;margin-inline-start:6px;white-space:nowrap;vertical-align:middle}
 .intl-ban{display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;background:#E6F0FF;border:2px solid #0B4FB3;color:#0B4FB3;border-radius:16px;padding:12px 14px;font-size:16px}
 .intl-ban b{font-size:20px;font-weight:900}
+
+/* Taps feel instant (Jeinna, 25 Nov 2026): no double-tap zoom wait, no grey flash, a pressed look right away */
+button,a,input,select,textarea,label{touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+button,a{-webkit-user-select:none;user-select:none}
+.soft,.dark,.danger,.sm,.tab,.later,.back,.trash,.mon{transition:transform .08s ease,opacity .08s ease}
+.soft:active,.dark:active,.danger:active,.sm:active,.back:active,.trash:active,.mon:active{transform:scale(.97);opacity:.85}
+.tab:active{opacity:.6}
+.row .open,.row .ring,.big,.giant{transition:transform .08s ease,box-shadow .08s ease}
+/* a lead that just moved, lit up where it landed */
+.row.moved .open{box-shadow:0 0 0 3px var(--c-new) inset;transition:box-shadow .3s ease}
+/* a toast with a button */
+.toast div.act{pointer-events:auto;display:flex;align-items:center;gap:14px;border-radius:16px;padding:12px 14px 12px 20px}
+.toast div.act button{flex:none;border:none;background:var(--ink-fg);color:var(--ink);font-weight:700;font-size:15px;border-radius:12px;padding:9px 14px;min-height:40px}
