@@ -26,6 +26,17 @@ export const AUTO_RE = /^נשלח אוטומטית/;
 // the note an automation writes (under Matan's monday account) when a Meta lead asks to be called:
 // it's the call request itself, not someone handling the lead (Jeinna, 12 Nov 2026)
 export const ASK_RE = /^הליד ביקש בטופס/;
+// Since 25 Nov 2026 the Make automations write to monday under Matan's account instead of Flow Admin's (BOT),
+// so an automation's note is recognised by its text, not only by who posted it.
+export function autoText(t) { t = String(t || "").trim(); return AUTO_RE.test(t) || ASK_RE.test(t) || CB_RE.test(t) || RET_RE.test(t); }
+// A status change the automation made. monday names the account its connection runs as (Matan's since
+// 25 Nov 2026), so: a lead's first status (set when the automation creates it), or Qualified within
+// 3 minutes of a "the lead clicked" note (the email-button automation does both together).
+export function autoStatus(l, cbAts) {
+  if (!l || !l.to) return false;
+  if (!l.from) return true;
+  return l.to === "Qualified" && (cbAts || []).some((a) => Math.abs(a - l.at) < 180000);
+}
 // Notes posted from this app end with "— Name · 10.11.2026 14:32" (one monday token posts them all)
 export const SIGN_RE = /\n?\s*— ([^\n—·]{1,40}?)\s*(?:·[^\n—]{0,40})?\s*$/;
 // the note without its signature
@@ -97,19 +108,21 @@ export function signals(updates, authors) {
   for (const u of updates) {
     const id = String(u.item_id || "");
     if (!id) continue;
-    const s = sig[id] || (sig[id] = { cb: 0, m: 0, na: 0, ret: 0, last: null, claude: [] });
+    const s = sig[id] || (sig[id] = { cb: 0, m: 0, na: 0, ret: 0, last: null, claude: [], auto: [], cbs: [] });
     const t = String(u.text_body || "").trim();
     const at = Date.parse(u.created_at) || 0;
     const bot = String((u.creator && u.creator.id) || "") === BOT;
+    const auto = bot || autoText(t); // an automation's note, whichever account posted it
+    if (auto) s.auto.push(at);
     if (AUTO_RE.test(t)) continue;
     if (ASK_RE.test(t)) { s.m = Math.max(s.m, at); continue; }
-    const isCb = bot && CB_RE.test(t);
-    if (isCb) s.cb = Math.max(s.cb, at);
+    const isCb = CB_RE.test(t); // only the email-button automation writes "הליד לחץ"
+    if (isCb) { s.cb = Math.max(s.cb, at); s.cbs.push(at); }
     if (bot && META_RE.test(t)) s.m = Math.max(s.m, at);
-    if (!bot && NA_RE.test(t)) s.na++;
+    if (!auto && NA_RE.test(t)) s.na++;
     if (RET_RE.test(t)) s.ret = Math.max(s.ret, at);
     if (CLAUDE_RE.test(t)) s.claude.push(at);
-    if (!bot && !isCb && t && t.charAt(0) !== "@" && (!s.last || at > s.last.at)) {
+    if (!auto && t && t.charAt(0) !== "@" && (!s.last || at > s.last.at)) {
       s.last = { t: unsign(t).slice(0, 400), at, by: CLAUDE_RE.test(t) ? "Claude" : noteBy(t, u.creator && u.creator.name, authors[String(u.id)]) };
     }
   }
@@ -123,7 +136,8 @@ export function merge(d, prev, s) {
   d.mcb = Math.max(prev.mcb || 0, s.m || 0, META_RE.test(d.about) ? d.created : 0);
   d.na = Math.max(prev.na || 0, s.na || 0);
   d.ret = Math.max(prev.ret || 0, s.ret || 0);
-  const pl = prev.last_at && !ASK_RE.test(String(prev.last_t || "")) ? { t: prev.last_t, at: prev.last_at, by: prev.last_by } : null;
+  // an automation's note kept from before 26 Nov 2026 (posted under Matan's account) isn't a team note
+  const pl = prev.last_at && !autoText(prev.last_t) ? { t: prev.last_t, at: prev.last_at, by: prev.last_by } : null;
   const last = (s.last && (!pl || s.last.at >= (pl.at || 0) - 5000)) ? s.last : pl;
   d.last_t = last ? last.t : null; d.last_at = last ? last.at : 0; d.last_by = last ? (last.by || "") : "";
   d.st_at = prev.st_at || 0;
@@ -150,7 +164,7 @@ export function noteHtml(text, by, at) {
 export function historyRow(u, authors) {
   authors = authors || {};
   const t = String(u.text_body || "").trim();
-  const bot = String((u.creator && u.creator.id) || "") === BOT;
+  const bot = String((u.creator && u.creator.id) || "") === BOT || autoText(t);
   return {
     id: String(u.id), lead_id: String(u.item_id || ""), kind: "note", text: unsign(t).slice(0, 4000),
     by: bot ? "Flow Admin" : CLAUDE_RE.test(t) ? "Claude" : noteBy(t, u.creator && u.creator.name, authors[String(u.id)]), at: Date.parse(u.created_at) || 0, source: "monday", bot,
@@ -173,6 +187,10 @@ export function statusLog(a) {
 export function stamp(prev, s, logs) {
   prev = prev || {};
   let best = { changed_by: prev.changed_by || "", changed_at: Number(prev.changed_at || 0), changed_what: prev.changed_what || "" };
+  // a stamp kept from before 26 Nov 2026 that was really the automation (posted under Matan's account): drop it
+  const near = (a) => Math.abs(Number(a) - best.changed_at) <= 5000;
+  if (best.changed_at && ((logs || []).some((l) => l.by === "monday automation" && near(l.at) && best.changed_what === "Status → " + l.to)
+    || (best.changed_what === "Note" && ((s && s.auto) || []).some(near)))) best = { changed_by: "", changed_at: 0, changed_what: "" };
   const cands = [];
   if (s && s.last) cands.push({ by: s.last.by, at: s.last.at, what: NA_RE.test(s.last.t) ? "No answer" : "Note" });
   for (const l of logs || []) if (l.to && l.by !== "monday automation") cands.push({ by: l.by, at: l.at, what: "Status → " + l.to });
