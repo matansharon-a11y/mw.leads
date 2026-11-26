@@ -2,7 +2,7 @@
 // Matan's page. Called every minute by pg_cron (x-cron-secret) and by the page's Refresh
 // button / auto-refresh (a signed-in team member).
 import { admin, cors, json, monday, MondayError, ownToken, teamMember } from "../_shared/common.ts";
-import { BOARD, C, SKIP_GROUPS, differs, fromItem, historyRow, historyText, merge, signals, stamp, statusLog, teamName } from "../_shared/signals.js";
+import { BOARD, C, SKIP_GROUPS, autoStatus, differs, fromItem, historyRow, historyText, merge, signals, stamp, statusLog, teamName } from "../_shared/signals.js";
 
 // only the columns MWP Leads uses (Follow Up Date's value carries its time)
 const BASIC = [C.status, C.phone, C.email, C.source, C.interest, C.about, C.lang, C.fuDate, C.fu, C.lost];
@@ -102,6 +102,8 @@ Deno.serve(async (req) => {
         const dup = (appSt || []).some((r: any) => r.lead_id === l.lead_id && Math.abs(Number(r.at) - l.at) < 120000 && String(r.text).includes("→ " + l.to));
         if (dup) continue;
         l.by = authors["st-" + l.lead_id + "-" + l.at] || (Number(l.user_id) > 0 ? teamName(names[l.user_id] || "monday") : "monday automation");
+        // the Make automations change statuses under Matan's account since 25 Nov 2026: that's not Matan handling the lead
+        if (!authors["st-" + l.lead_id + "-" + l.at] && autoStatus(l, sig[l.lead_id]?.cbs)) l.by = "monday automation";
         // a status change Claude made shows under the person's account, a moment before Claude's note
         if ((sig[l.lead_id]?.claude || []).some((c: number) => Math.abs(c - l.at) < 180000)) l.by = "Claude";
         (logsByLead[l.lead_id] ||= []).push(l);
