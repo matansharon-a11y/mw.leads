@@ -17,8 +17,9 @@ const ups = [
   { item_id: 3, text_body: "Spoke with her\n— Eliran", created_at: T("2026-11-06T12:00:00Z"), creator: { id: "9", name: "Jeinna Louise Perez" } },
 ];
 const s = signals(ups);
-ok(s[1].cb === Date.parse("2026-11-09T10:00:00Z"), "email call-me only from Flow Admin");
-ok(s[1].last && s[1].last.by === "Matan", "team note starting הליד לחץ (not bot) is the last note, with the team name");
+ok(s[1].cb === Date.parse("2026-11-09T10:00:00Z"), "email call-me: the newest click note");
+// since 25 Nov 2026 the automations post under Matan's account: a הליד לחץ note is the automation, not a team note
+ok(!s[1].last, "הליד לחץ under a person's account is the automation, not the last team note");
 ok(s[2].m === Date.parse("2026-11-08T10:00:00Z"), "Meta callback from Flow Admin");
 ok(s[2].na === 2, "No answer counts team notes only (2), got " + s[2].na);
 ok(s[3].ret === Date.parse("2026-11-07T10:00:00Z"), "came back");
