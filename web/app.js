@@ -68,6 +68,15 @@ function intl(l) {
   return { code: c ? "+" + c[0] : e.slice(0, 4), country: c ? L(c[1], c[2]) : "" };
 }
 function telShow(e) { if (!e) return ""; if (e.indexOf("+972") === 0) { const r = "0" + e.slice(4); return r.length === 10 ? r.slice(0, 3) + "-" + r.slice(3, 6) + "-" + r.slice(6) : r; } return e; }
+// WhatsApp: on a phone, the WhatsApp app; on a computer, WhatsApp Web in the browser (Jeinna, 26 Nov 2026: wa.me on
+// a computer opened the WhatsApp desktop app, which wasn't signed in, and asked to register)
+const ON_COMPUTER = (() => { try { return matchMedia("(hover: hover) and (pointer: fine)").matches && !/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent); } catch (_) { return false; } })();
+function waLink(e164, text) {
+  const n = String(e164 || "").replace(/^\+/, "");
+  return ON_COMPUTER
+    ? "https://web.whatsapp.com/send?phone=" + n + (text ? "&text=" + encodeURIComponent(text) : "")
+    : "https://wa.me/" + n + (text ? "?text=" + encodeURIComponent(text) : "");
+}
 function toast(t, bad, act) {
   const el = $("toast"), box = el.firstElementChild;
   box.textContent = t; box.className = (bad ? "bad" : "") + (act ? " act" : "");
@@ -297,7 +306,7 @@ function renderLead(id, fresh) {
     (w ? '<div class="flag">' + esc(w) + '</div>' : "") +
     pendBox(id) +
     (e ? '<a class="giant" data-tap="call" href="tel:' + esc(e) + '">' + PHONE + '<span>' + L("להתקשר", "Call") + '<small>' + esc(telShow(e)) + '</small></span></a>' : '<div class="giant off">' + L("אין מספר טלפון", "No phone number") + '</div>') +
-    (e ? '<div class="two"><a class="soft" data-tap="whatsapp" target="_blank" rel="noopener" href="https://wa.me/' + esc(e.slice(1)) + '">WhatsApp</a><button type="button" class="soft" data-act="copy" data-tap="copy" data-v="' + esc(telShow(e)) + '">' + L("העתקת מספר", "Copy number") + '</button></div>' : "") +
+    (e ? '<div class="two"><a class="soft" data-tap="whatsapp" target="_blank" rel="noopener" href="' + esc(waLink(e)) + '">WhatsApp</a><button type="button" class="soft" data-act="copy" data-tap="copy" data-v="' + esc(telShow(e)) + '">' + L("העתקת מספר", "Copy number") + '</button></div>' : "") +
     callBlock(l) +
     (l.changedBy ? '<div class="stampbig">' + esc(stampText(l)) + '</div>' : "") +
     (l.last && l.last.t ? '<div class="lastn">' + esc(l.last.t) + '<small>' + esc(l.last.by || "") + ' · ' + esc(when(l.last.at)) + '</small></div>' : "") +
@@ -481,7 +490,7 @@ function callBlock(l) {
     '<div class="cc-h">' + L("להזמין את הלקוח/ה", "Invite the client") + '</div>' +
     '<div class="cc-main">' +
       '<a class="cc-btn" target="_blank" rel="noopener" href="' + esc(gcalLink(l, lang, false)) + '">' + ICAL + '<span>' + (hasMail ? L("הזמנה ביומן", "Calendar invite") : L("להוסיף ליומן", "Add to calendar")) + '</span></a>' +
-      (wa ? '<a class="cc-btn" data-tap="whatsapp" target="_blank" rel="noopener" href="https://wa.me/' + esc(wa.slice(1)) + '?text=' + encodeURIComponent(waText(l, lang)) + '">' + IWA + '<span>WhatsApp</span></a>' : '') +
+      (wa ? '<a class="cc-btn" data-tap="whatsapp" target="_blank" rel="noopener" href="' + esc(waLink(wa, waText(l, lang))) + '">' + IWA + '<span>WhatsApp</span></a>' : '') +
     '</div>' +
     (hasMail ? '' : '<div class="cc-note">' + L("אין מייל לליד הזה, אז ההזמנה ביומן נשמרת רק אצלך.", "No email for this lead, so the calendar event is only for you.") + '</div>') +
     '<button type="button" class="cc-prev" data-act="preview">' + ICP + L("תצוגה מקדימה והעתקה של ההודעות", "Preview and copy the messages") + '</button>' +
@@ -498,7 +507,7 @@ function previewDialog() {
   $("pvWaH").textContent = "WhatsApp";
   $("pvWa").textContent = waText(l, lang); $("pvWa").dir = lang === "he" ? "rtl" : "ltr";
   $("pvWaBtns").innerHTML = '<button type="button" class="soft" data-act="copywa">' + L("העתקה", "Copy") + '</button>' +
-    (wa ? '<a class="soft" data-tap="whatsapp" target="_blank" rel="noopener" href="https://wa.me/' + esc(wa.slice(1)) + '?text=' + encodeURIComponent(waText(l, lang)) + '">' + L("פתיחה בוואטסאפ", "Open in WhatsApp") + '</a>' : '');
+    (wa ? '<a class="soft" data-tap="whatsapp" target="_blank" rel="noopener" href="' + esc(waLink(wa, waText(l, lang))) + '">' + L("פתיחה בוואטסאפ", "Open in WhatsApp") + '</a>' : '');
   $("pvMailH").textContent = L("מייל", "Email");
   $("pvSubj").textContent = L("נושא: ", "Subject: ") + mailSubject(l, lang);
   $("pvMail").innerHTML = mailHtml(l, lang);
